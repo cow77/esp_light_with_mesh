@@ -90,8 +90,6 @@ void user_rf_pre_init(void)
 void ICACHE_FLASH_ATTR
 	light_main_flow()
 {
-disp_heap(3);
-
 #if ESP_NOW_SUPPORT
     light_action_init();
 #endif
@@ -104,7 +102,6 @@ disp_heap(3);
 	user_set_mesh_info();
     user_mesh_init();
 #endif
-disp_heap(4);
 
 #if 1
 
@@ -145,16 +142,6 @@ httpdInit(builtInUrls, SERVER_PORT);
 		user_webserver_init(SERVER_PORT);
 #endif
 #endif
-disp_heap(7);
-
-
-
-	//Initialize DNS server for captive portal
-	//captdnsInit();
-	//Initialize espfs containing static webpages
-	//espFsInit((void*)(webpages_espfs_start));
-	//Initialize webserver
-	//httpdInit(builtInUrls, SERVER_PORT);
 
 #endif
 
@@ -168,27 +155,13 @@ disp_heap(7);
 *******************************************************************************/
 void user_init(void)
 {
-disp_heap(1);
-
-
-//uint8 data_t[1024]={0};
 	uart_init(74880,74880);
 	wifi_set_opmode(STATIONAP_MODE);
 	wifi_station_set_auto_connect(0);
 	wifi_station_disconnect();
-   // os_printf("SDK version:%s\n", system_get_sdk_version());
+    os_printf("SDK version:%s\n", system_get_sdk_version());
 	wifi_station_ap_number_set(AP_CACHE_NUMBER);
 	system_init_done_cb(light_main_flow);
-
-disp_heap(2);
-
-//Initialize DNS server for captive portal
-//captdnsInit();
-//Initialize espfs containing static webpages
-//espFsInit((void*)(webpages_espfs_start));
-//Initialize webserver
-//httpdInit(builtInUrls, SERVER_PORT);
-
 
 }
 

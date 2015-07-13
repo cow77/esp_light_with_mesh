@@ -548,7 +548,7 @@ void ICACHE_FLASH_ATTR switch_ActionInit()
 		os_printf("dl init failed\n");
 	}
     esp_now_set_self_role(ESP_NOW_ROLE_CONTROLLER);  //role 1: switch   ;  role 2 : light;
-	//esp_now_set_kok(esp_now_key, ESPNOW_KEY_LEN);
+	esp_now_set_kok(esp_now_key, ESPNOW_KEY_LEN);
 
 
 	system_param_load(FLASH_PARAM_SEC,0,&flashData_t,sizeof(flashData_t));
