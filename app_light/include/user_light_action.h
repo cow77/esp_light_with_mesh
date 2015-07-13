@@ -1,0 +1,90 @@
+#ifndef _USER_LIGHT_ACTION_H
+#define _USER_LIGHT_ACTION_H
+
+
+#include "user_config.h"
+#include "os_type.h"
+
+#define ACT_DEBUG 1
+#define ACT_PRINT os_printf
+
+#define ESPNOW_ENCRYPT  1
+#define ESPNOW_KEY_LEN 16
+uint8 esp_now_key[ESPNOW_KEY_LEN] = {0x10,0xfe,0x94, 0x7c,0xe6,0xec,0x19,0xef,0x33, 0x9c,0xe6,0xdc,0xa8,0xff,0x94, 0x7d};//key
+
+
+#if ACT_DEBUG
+#define LIGHT_DEV_NUM  10
+#define SWITCH_DEV_NUM 5
+
+const uint8 SWITCH_MAC[SWITCH_DEV_NUM][6] = {{0x18,0xfe,0x34, 0xa5,0x3d,0x68},
+                                             {0x18,0xfe,0x34, 0xa5,0x3d,0x66},
+                                             {0x18,0xfe,0x34, 0x9C,0xe6,0xec},
+                                             {0x18,0xfe,0x34, 0xa5,0x3d,0x5d},
+                                             {0x18,0xfe,0x34, 0xa5,0x3d,0x61}};
+
+const uint8 LIGHT_MAC[LIGHT_DEV_NUM][6] = {
+                                                     {0x1a,0xfe,0x34, 0x9a,0xa3,0xcd},
+	                                                 {0x1a,0xfe,0x34, 0xa0,0xd6,0x97},
+	                                                 {0x1a,0xfe,0x34, 0x9f,0xf3,0x68},	                                                 
+	                                                 {0x1a,0xfe,0x34, 0xa0,0xac,0x19},
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x08,0x25},
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x09,0x3a},
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x32,0xaa},												
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x06,0x66},												
+	                                                 {0x1a,0xfe,0x34, 0x00,0x00,0x00},
+	                                                 {0x1a,0xfe,0x34, 0x00,0x00,0x00}
+                                                       };
+
+#else
+#define LIGHT_DEV_NUM  10
+
+const uint8 SWITCH_MAC[6] = {0x18,0xfe,0x34, 0xa1,0x32,0xaa};
+
+const uint8 LIGHT_MAC[LIGHT_DEV_NUM][6] = {
+                                                     {0x18,0xfe,0x34, 0xa0,0x3c,0x7c},
+	                                                 {0x18,0xfe,0x34, 0xa1,0x09,0x87},
+	                                                 {0x18,0xfe,0x34, 0xa0,0xc9,0xb4},
+	                                                 {0x18,0xfe,0x34, 0x9f,0xf3,0x68},
+	                                                 {0x18,0xfe,0x34, 0xa1,0x08,0xeb},
+	                                                 {0x18,0xfe,0x34, 0x00,0x00,0x00},
+	                                                 {0x18,0xfe,0x34, 0x00,0x00,0x00},
+	                                                 {0x18,0xfe,0x34, 0x00,0x00,0x00},
+	                                                 {0x18,0xfe,0x34, 0x00,0x00,0x00},
+	                                                 {0x18,0xfe,0x34, 0x00,0x00,0x00}
+                                                       };
+
+
+#endif
+
+
+
+#if LIGHT_DEVICE
+int light_action_get_battery_status(int idx, char *mac, int *status, int *voltage_mv);
+void light_action_init();
+void light_action_deinit();
+
+
+
+#elif LIGHT_SWITCH
+
+
+void  switch_ActionInit();
+void  switch_set_light_param(uint8 idx, uint32 channelNum, uint32* duty, uint32 period);
+void switch_send_channel_cmd(uint8 chn,uint32 channelNum, uint32* duty, uint32 period);
+void switch_set_sync_param(uint8 channel);
+void  switch_ActionDeinit();
+
+
+#endif
+
+
+
+
+
+
+
+
+
+
+#endif
