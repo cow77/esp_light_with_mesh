@@ -69,7 +69,7 @@ HttpdBuiltInUrl builtInUrls[]={
 */
 
 
-uint32 user_get_battery_voltage_mv() {
+uint32 user_GetBatteryVoltageMv() {
 	int r=system_get_vdd33();
 	int mv=(r*1000)/1024;
 	os_printf("BATTERY VAL: %d, raw %d\n", mv, r);

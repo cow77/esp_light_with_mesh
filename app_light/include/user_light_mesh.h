@@ -15,9 +15,13 @@
 
 
 #define MESH_INFO os_printf
+
+//number of retry attempts after mesh enable failed;
 #define MESH_INIT_RETRY_LIMIT 0
+//limit time of mesh init
 #define MESH_INIT_TIME_LIMIT  30000
 #define MESH_TIME_OUT_MS   30000
+//time expire to check mesh init status
 #define MESH_STATUS_CHECK_MS  1000
 
 typedef void (*mesh_FailCallback)(void *para);
@@ -34,12 +38,15 @@ typedef struct  {
 
 
 /*SET THE DEFAULT MESH SSID PATTEN*/
-#define MESH_SSID_PREFIX "ESP_MESH"
+/*THE FINAL SSID OF SOFTAP WOULD BE "MESH_SSID_PREFIX_X_YYYYYY"*/
+#define MESH_SSID_PREFIX "TEST_MESH"
 #define MESH_AUTH AUTH_WPA2_PSK //AUTH_OPEN //AUTH_WPA_WPA2_PSK
-#define MESH_PASSWORD  "123456789"
-void user_mesh_init();
-void user_set_mesh_info();
-void mesh_reconn_stop();
+#define MESH_PASSWORD  "123123123"
+
+
+void user_MeshInit();
+void user_MeshSetInfo();
+void mesh_StopReconnCheck();
 
 #endif
 #endif

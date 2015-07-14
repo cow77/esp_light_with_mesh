@@ -122,7 +122,7 @@ void ICACHE_FLASH_ATTR
 	user_startChannelSync()
 {
 	_SWITCH_GPIO_HOLD();
-    switch_channel_sync_start();
+    switch_EspnowChnSyncStart();
 
 }
 
@@ -137,7 +137,7 @@ void ICACHE_FLASH_ATTR
         _SWITCH_GPIO_RELEASE(); //first power on when exchange battery
 	}
 	//======================================
-    switch_ActionInit();
+    switch_EspnowInit();
     os_printf("test action init ,CHANNEL %d \r\n",wifi_get_channel());
 	uint32 r=0,g=0,b=0,cw=0,ww=0;
     uint32 pwm_duty_data[5];
@@ -169,7 +169,7 @@ void ICACHE_FLASH_ATTR
 	pwm_duty_data[4]=ww;
 
 	int i;
-	switch_send_channel_cmd(1, 5, pwm_duty_data, 1000);
+	switch_EspnowSendCmdByChnl(1, 5, pwm_duty_data, 1000);
 
 
 	//if there is a long press, run channel synchronization.

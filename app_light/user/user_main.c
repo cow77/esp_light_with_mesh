@@ -91,7 +91,10 @@ void ICACHE_FLASH_ATTR
 	light_main_flow()
 {
 #if ESP_NOW_SUPPORT
-    light_action_init();
+    /*We have added esp-now feature in the light project */
+    /*So that the lights in a certain MAC group can be easily controlled by an ESP-NOW controller*/
+    /*The sample code is in APP_CONTROLLER/APP_SWITCH*/
+    light_EspnowInit();
 #endif
 
 #if ESP_MESH_SUPPORT
@@ -99,8 +102,8 @@ void ICACHE_FLASH_ATTR
 	  1. search for existing mesh.
       2. if failed , try connecting recorded router.
 	*/
-	user_set_mesh_info();
-    user_mesh_init();
+	user_MeshSetInfo();
+    user_MeshInit();
 #endif
 
 #if 1
@@ -162,6 +165,9 @@ void user_init(void)
     os_printf("SDK version:%s\n", system_get_sdk_version());
 	wifi_station_ap_number_set(AP_CACHE_NUMBER);
 	system_init_done_cb(light_main_flow);
+
+	
+	//espSendQueueInit();
 
 }
 

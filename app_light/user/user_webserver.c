@@ -18,6 +18,7 @@
 #include "espconn.h"
 #include "user_json.h"
 #include "user_webserver.h"
+#include "esp_send.h"
 
 #include "upgrade.h"
 #if ESP_PLATFORM
@@ -384,7 +385,7 @@ static int ICACHE_FLASH_ATTR light_switchstatus_get(struct jsontree_context *js_
 	const char *path=jsontree_path_name(js_ctx, js_ctx->depth-1);
 	int idx=js_ctx->index[js_ctx->depth-2];
 	#if ESP_NOW_SUPPORT&&LIGHT_DEVICE
-	light_action_get_battery_status(idx, mac, &status, &mv);
+	light_EspnowGetBatteryStatus(idx, mac, &status, &mv);
 	if (os_strcmp(path, "mac")==0) {
 		os_sprintf(buf, "%02X:%02X:%02X:%02X:%02X:%02X", 
 			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -1097,6 +1098,7 @@ data_send(void *arg, bool responseOK, char *psend)
     char httphead[256];
     struct espconn *ptrespconn = arg;
     os_memset(httphead, 0, 256);
+	sint8 res;
 
     if (responseOK) {
         os_sprintf(httphead,
@@ -1121,6 +1123,7 @@ Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
     }
 
     if (psend) {
+#if 0
 #ifdef SERVER_SSL_ENABLE
         espconn_secure_sent(ptrespconn, pbuf, length);
 #else
@@ -1130,13 +1133,48 @@ Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
 		
 		WEB_INFO("HTTP SEND : RES: %d \r\n%s \r\n",res,pbuf);
 #endif
+#else
+        //sint8 res;
+        bool queue_empty = espSendQueueIsEmpty(espSendGetRingbuf());
+        
+        res = espSendEnq(pbuf, length, ptrespconn, ESP_DATA,TO_LOCAL,espSendGetRingbuf());
+        if(res==-1){
+        	os_printf("espconn send error , no buf in app...\r\n");
+        }
+        
+        /*send the packet if platform sending queue is empty*/
+        /*if not, espconn sendcallback would post another sending event*/
+        if(queue_empty){
+        	system_os_post(ESP_SEND_TASK_PRIO, 0, (os_param_t)espSendGetRingbuf());
+        }
+
+
+#endif
+
     } else {
+#if 0
 #ifdef SERVER_SSL_ENABLE
         espconn_secure_sent(ptrespconn, httphead, length);
 #else
 		sint8 res;
         res = espconn_sent(ptrespconn, httphead, length);
         WEB_INFO("HTTP SEND : RES: %d\r\n%s \r\n",res,httphead);
+#endif
+#else
+        //sint8 res;
+        bool queue_empty = espSendQueueIsEmpty(espSendGetRingbuf());
+        
+        res = espSendEnq(httphead, length, ptrespconn, ESP_DATA,TO_LOCAL,espSendGetRingbuf());
+        if(res==-1){
+        	os_printf("espconn send error , no buf in app...\r\n");
+        }
+        
+        /*send the packet if platform sending queue is empty*/
+        /*if not, espconn sendcallback would post another sending event*/
+        if(queue_empty){
+        	system_os_post(ESP_SEND_TASK_PRIO, 0, (os_param_t)espSendGetRingbuf());
+        }
+
 #endif
     }
 
@@ -1976,7 +2014,6 @@ void webserver_discon(void *arg)
         		pesp_conn->proto.tcp->remote_ip[1],pesp_conn->proto.tcp->remote_ip[2],
         		pesp_conn->proto.tcp->remote_ip[3],pesp_conn->proto.tcp->remote_port);
 }
-
 /******************************************************************************
  * FunctionName : user_accept_listen
  * Description  : server listened a connection successfully
@@ -2009,6 +2046,7 @@ user_webserver_init(uint32 port)
     esp_conn.state = ESPCONN_NONE;
     esp_conn.proto.tcp = &esptcp;
     esp_conn.proto.tcp->local_port = port;
+
 	
     espconn_regist_recvcb(&esp_conn, webserver_recv);
     espconn_regist_connectcb(&esp_conn, webserver_listen);

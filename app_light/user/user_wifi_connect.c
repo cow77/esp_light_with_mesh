@@ -23,15 +23,9 @@ static bool wifiReconFlg = false;
 bool ap_cache_if = false;
 
 
-
-
-
-//--------------------------------
-void ICACHE_FLASH_ATTR wifi_disable_check_ip();
+void ICACHE_FLASH_ATTR WIFI_StopCheckIp();
 void ICACHE_FLASH_ATTR WIFI_Connect(uint8_t* ssid, uint8_t* pass, WifiCallback cb);
 
-
-//--------------------------------
 
 
 //=====================================================================
@@ -44,7 +38,7 @@ os_timer_t mesh_scan_t;
 
 #define AP_CACHE_TOUT_MS 20000
 uint8 ICACHE_FLASH_ATTR
-    get_ap_cache()
+    APCache_GetNum()
 {
 	struct station_config config[5];
 	uint8 ap_record_num = wifi_station_get_ap_info(config);	
@@ -53,7 +47,7 @@ uint8 ICACHE_FLASH_ATTR
 }
 
 void ICACHE_FLASH_ATTR
-	ap_cache_tout()
+	APCache_TimeoutCb()
 {
 	os_timer_disarm(&ap_cache_t);
 	ap_cache_if = false;
@@ -62,11 +56,11 @@ void ICACHE_FLASH_ATTR
 	_LINE_DESP();
 	
 	wifi_station_disconnect();
-	wifi_disable_check_ip();//check
+	WIFI_StopCheckIp();//check
 #if ESP_TOUCH_SUPPORT
 	//INFO("ESP_TOUCH FLG: %d \r\n",esptouch_getAckFlag());
 	if(false == esptouch_getAckFlag()){
-	    esptouch_flow_init();
+	    esptouch_FlowStart();
 		esptouch_setAckFlag(true);
 		return;
 	}
@@ -74,12 +68,12 @@ void ICACHE_FLASH_ATTR
 #if ESP_MESH_SUPPORT
 	//else{
 	    INFO("AP CACHE TOUT,ALREADY DID ESP-TOUCH\r\n");
-		mesh_set_softap();
+		mesh_SetSoftap();
 		INFO("RE-SEARCH MESH NETWORK,in 60s \r\n");
-		//user_mesh_init();
+		//user_MeshInit();
 		
 		os_timer_disarm(&mesh_scan_t);
-		os_timer_setfn(&mesh_scan_t,user_mesh_init,NULL);
+		os_timer_setfn(&mesh_scan_t,user_MeshInit,NULL);
 		os_timer_arm(&mesh_scan_t,60000,0);
 	//}
 #endif
@@ -88,14 +82,16 @@ void ICACHE_FLASH_ATTR
 uint8 ap_cache_record_num = 0;
 uint8 ap_cache_record_flg = 0;
 
+#if 0
 bool ICACHE_FLASH_ATTR
-	get_ap_cache_status()
+	APCache_GetStatus()
 {
 	return ap_cache_if;
 }
+#endif
 
 void ICACHE_FLASH_ATTR
-	check_ap_cache()
+	APCache_Connect()
 {
 	ap_cache_if=true;
 	struct station_config config[5];
@@ -103,7 +99,7 @@ void ICACHE_FLASH_ATTR
 	INFO("AP CACHE NUM : %d \r\n",ap_cnt);
 
 
-	//uint8 ap_cnt = get_ap_cache();
+	//uint8 ap_cnt = APCache_GetNum();
 	uint8 ap_cur;
 	if(ap_cnt>0){
 		INFO("AP CACHE FIND, TRY CONNECTING WIFI \r\n");
@@ -131,7 +127,7 @@ void ICACHE_FLASH_ATTR
 					ap_cache_record_flg = 1;
 				}else{
 					if(ap_cache_record_num == ap_cur){
-						ap_cache_tout();
+						APCache_TimeoutCb();
 					}
 				}
 				
@@ -150,7 +146,7 @@ void ICACHE_FLASH_ATTR
 		INFO("ESP_TOUCH FLG: %d \r\n",esptouch_getAckFlag());
 		if(false == esptouch_getAckFlag()){
 			
-			esptouch_flow_init();
+			esptouch_FlowStart();
 			esptouch_setAckFlag(true);
 			return;
 		}
@@ -159,11 +155,11 @@ void ICACHE_FLASH_ATTR
 	#if ESP_MESH_SUPPORT
 	    //else{
 			INFO("ALREADY DID ESP-TOUCH,RESTART MESH IN 60 S\r\n");
-			mesh_set_softap();
+			mesh_SetSoftap();
 			os_timer_disarm(&mesh_scan_t);
-			os_timer_setfn(&mesh_scan_t,user_mesh_init,NULL);
+			os_timer_setfn(&mesh_scan_t,user_MeshInit,NULL);
 			os_timer_arm(&mesh_scan_t,60000,0);
-			//user_mesh_init();
+			//user_MeshInit();
 		//}
 	#endif
 	}
@@ -196,14 +192,14 @@ void ICACHE_FLASH_ATTR
 #endif
 
 void ICACHE_FLASH_ATTR
-    wifi_ConnectCb(uint8_t status)
+    WIFI_ConnectCb(uint8_t status)
 {
     //wifi_station_set_auto_connect(1);
     if(wifiReconFlg && (ap_cache_if==false)){
 		wifiReconFlg = false;
 		INFO("WIFI RECONN FLG: %d \r\n",wifiReconFlg);
 		INFO("DO AP CACHE\r\n");
-		check_ap_cache();	
+		APCache_Connect();	
 		return;
     }
     
@@ -231,7 +227,7 @@ void ICACHE_FLASH_ATTR
 			_LINE_DESP();
 			INFO("STATION STATUS: %d \r\n",status);
 			_LINE_DESP();
-			check_ap_cache();
+			APCache_Connect();
 		}
 
 	}
@@ -239,15 +235,15 @@ void ICACHE_FLASH_ATTR
 
 
 
-static void ICACHE_FLASH_ATTR wifi_check_ip(void *arg)
+static void ICACHE_FLASH_ATTR WIFI_CheckIp(void *arg)
 {
 	
 	os_timer_disarm(&WiFiLinker);
 
 	#if ESP_MESH_SUPPORT
 		if(MESH_DISABLE != espconn_mesh_get_status()){
-			
-			os_timer_setfn(&WiFiLinker, (os_timer_func_t *)wifi_check_ip, NULL);
+			/*MESH layer would handle wifi status exception at first*/
+			os_timer_setfn(&WiFiLinker, (os_timer_func_t *)WIFI_CheckIp, NULL);
 			os_timer_arm(&WiFiLinker, 1000, 0);
 			return;
 		}else{
@@ -263,7 +259,7 @@ static void ICACHE_FLASH_ATTR wifi_check_ip(void *arg)
 	wifiStatus = wifi_station_get_connect_status();
 	if (wifiStatus == STATION_GOT_IP && ipConfig.ip.addr != 0)
 	{
-		os_timer_setfn(&WiFiLinker, (os_timer_func_t *)wifi_check_ip, NULL);
+		os_timer_setfn(&WiFiLinker, (os_timer_func_t *)WIFI_CheckIp, NULL);
 		os_timer_arm(&WiFiLinker, 2000, 0);
 	}
 	else
@@ -300,7 +296,7 @@ static void ICACHE_FLASH_ATTR wifi_check_ip(void *arg)
 		}else{
 			INFO("STATUS ERROR\r\n");
 		}
-		os_timer_setfn(&WiFiLinker, (os_timer_func_t *)wifi_check_ip, NULL);
+		os_timer_setfn(&WiFiLinker, (os_timer_func_t *)WIFI_CheckIp, NULL);
 		os_timer_arm(&WiFiLinker, 1000, 0);
 	}
 	if(wifiStatus != lastWifiStatus || wifiReconFlg){
@@ -308,7 +304,7 @@ static void ICACHE_FLASH_ATTR wifi_check_ip(void *arg)
 		if(wifiCb){
 			wifiCb(wifiStatus);
 		}else{
-			wifi_ConnectCb(wifiStatus);
+			WIFI_ConnectCb(wifiStatus);
 		}
 	}
 }
@@ -325,7 +321,7 @@ void ICACHE_FLASH_ATTR
 	if(cb){
 	    wifiCb = cb;
 	}else{
-		wifiCb = wifi_ConnectCb;
+		wifiCb = WIFI_ConnectCb;
 	}
 
 	os_memset(&stationConf, 0, sizeof(struct station_config));
@@ -336,7 +332,7 @@ void ICACHE_FLASH_ATTR
 	wifi_station_set_config(&stationConf);
 
 	os_timer_disarm(&WiFiLinker);
-	os_timer_setfn(&WiFiLinker, (os_timer_func_t *)wifi_check_ip, NULL);
+	os_timer_setfn(&WiFiLinker, (os_timer_func_t *)WIFI_CheckIp, NULL);
 	os_timer_arm(&WiFiLinker, 1000, 0);
 
 	//wifi_station_set_auto_connect(TRUE);
@@ -344,33 +340,33 @@ void ICACHE_FLASH_ATTR
 }
 
 void ICACHE_FLASH_ATTR
-	wifi_disable_check_ip()
+	WIFI_StopCheckIp()
 {
 	os_timer_disarm(&WiFiLinker);
 }
 
 
 void ICACHE_FLASH_ATTR
-	wifi_enable_check_ip()
+	WIFI_StartCheckIp()
 {
 	lastWifiStatus = wifiStatus;
-    wifi_check_ip(NULL);
+    WIFI_CheckIp(NULL);
 }
 
 
 
 void ICACHE_FLASH_ATTR
-	wifi_ap_scan_start()
+	WIFI_StartAPScan()
 {
 	INFO("WIFI AP SCAN START\r\n");
 
 	//start a timer to check ap cache timeout;
 	os_timer_disarm(&ap_cache_t);
-	os_timer_setfn(&ap_cache_t,ap_cache_tout,NULL);
+	os_timer_setfn(&ap_cache_t,APCache_TimeoutCb,NULL);
 	os_timer_arm(&ap_cache_t,AP_CACHE_TOUT_MS,0);
 	ap_cache_record_flg = 0;
 	ap_cache_record_num = 0;
-	check_ap_cache();
+	APCache_Connect();
 }
 
 

@@ -53,7 +53,7 @@ typedef enum {
 
 
 bool ICACHE_FLASH_ATTR
-	light_action_cmd_validate(LightActionCmd* light_act_data)
+	light_EspnowCmdValidate(LightActionCmd* light_act_data)
 {
     uint8* data = (uint8*)light_act_data;
     uint32 csum_cal = 0;
@@ -69,7 +69,7 @@ bool ICACHE_FLASH_ATTR
 }
 
 void ICACHE_FLASH_ATTR
-	light_action_set_csum(LightActionCmd* light_act_data)
+	light_EspnowSetCsum(LightActionCmd* light_act_data)
 {
     uint8* data = (uint8*)light_act_data;
     uint32 csum_cal = 0;
@@ -82,105 +82,129 @@ void ICACHE_FLASH_ATTR
 
 
 #if LIGHT_DEVICE
-
 #define LIGHT_DEBUG 1
-void ICACHE_FLASH_ATTR light_action_rcv_cb(u8 *macaddr, u8 *data, u8 len)
+
+void ICACHE_FLASH_ATTR light_EspnowRcvCb(u8 *macaddr, u8 *data, u8 len)
 {
 	int i;
 	uint32 duty_set[PWM_CHANNEL] = {0};
 	uint32 period=1000;
 	   
-    LightActionCmd light_cmd ;
-    os_memcpy((uint8*)(&light_cmd), data,sizeof(LightActionCmd));
+     LightActionCmd light_cmd;
+	 os_memcpy((uint8*)(&light_cmd), data,sizeof(LightActionCmd));
+	 ACT_PRINT("RCV DATA: \r\n");
+	for(i=0;i<len;i++) ACT_PRINT("%02x ",data[i]);
+	ACT_PRINT("\r\n-----------------------\r\n");
+
+	
 		
-
-
-	if(light_action_cmd_validate(&light_cmd) ){
+	if(light_EspnowCmdValidate(&light_cmd) ){
 		ACT_PRINT("cmd check sum ok\r\n");
+
 		#if (LIGHT_DEBUG==0)  
+		//ACTUALL WE CAN GET THE PRACTIACAL MAC OF THE SOURCE NOW: (*macaddr)
        	if (0 == os_memcmp( light_cmd.source_mac, SWITCH_MAC,sizeof(SWITCH_MAC))){
 		#else  //debug!!!
        	if(true){ //debug
-       	
-		    uint8 mac_bkp[6] = {0};
-		    os_memcpy(mac_bkp,light_cmd.source_mac,sizeof(mac_bkp));
-			uint8 mac_buf[6] = {0};
-			wifi_get_macaddr(STATION_IF,mac_buf);
+			uint8 mac_bkp[6] = {0};
+            os_memcpy(mac_bkp,light_cmd.source_mac,sizeof(mac_bkp));
+            uint8 mac_buf[6] = {0};
+            //wifi_get_macaddr(STATION_IF,mac_buf);
+            wifi_get_macaddr(SOFTAP_IF,mac_buf);
        	#endif
 
 		    //if(light_cmd.wifiChannel == wifi_get_channel()){
+		        //ACT_DATA: this is a set of data or command.
 				if(light_cmd.type == ACT_DATA){
 					ACT_PRINT("period: %d ; channel : %d \r\n",light_cmd.period,light_cmd.pwm_num);
 					for(i=0;i<light_cmd.pwm_num;i++){
 							ACT_PRINT(" duty[%d] : %d \r\n",i,light_cmd.duty[i]);
 						duty_set[i] = light_cmd.duty[i];
 					}
+
 			       ACT_PRINT("SOURCE MAC CHEK OK \r\n");
+				   
+				   ACT_PRINT("cmd channel : %d \r\n",light_cmd.wifiChannel);
+				   ACT_PRINT("SELF CHANNEL: %d \r\n",wifi_get_channel());
+				   ACT_PRINT("Battery status %d voltage %dmV\r\n", light_cmd.battery_status, light_cmd.battery_voltage_mv);
+				   light_action_store_battery_status(light_cmd.source_mac, light_cmd.battery_status, light_cmd.battery_voltage_mv);
                	   light_set_aim(duty_set[0],duty_set[1],duty_set[2],duty_set[3],duty_set[4],light_cmd.period,0);
+       		     
                    light_cmd.type = ACT_TYPE_ACK;
+				   light_cmd.wifiChannel = wifi_get_channel();
 				   os_memcpy(light_cmd.source_mac,mac_buf,sizeof(mac_buf));
-                   os_printf("send ack \r\n");
+                   ACT_PRINT("send ack \r\n");
 				}
+				//ACT_TYPE_SYNC: AFTER LIGHT CONFIGURED TO ROUTER, ITS CHANNEL CHANGES
+				//               NEED TO SET THE CHANNEL FOR EACH LIGHT.
 				else if(light_cmd.type == ACT_TYPE_SYNC && (light_cmd.wifiChannel == wifi_get_channel())){
 					light_cmd.type = ACT_TYPE_SYNC;
-					os_printf("cmd rcv channel : %d \r\n",light_cmd.wifiChannel);
+					ACT_PRINT("cmd rcv channel : %d \r\n",light_cmd.wifiChannel);
 					light_cmd.wifiChannel = wifi_get_channel();
 					os_memcpy(light_cmd.source_mac,mac_buf,sizeof(mac_buf));
-					//os_memcpy(light_cmd.source_mac,LIGHT_MAC[light_cmd.cmd_index],sizeof(LIGHT_MAC[light_cmd.cmd_index]));
-					os_printf("send sync, self channel : %d  \r\n",wifi_get_channel());
+					ACT_PRINT("send sync, self channel : %d  \r\n",wifi_get_channel());
 				}else{
-					os_printf(" data type %d \r\n",light_cmd.type);
-					os_printf("data channel :%d \r\n",light_cmd.wifiChannel);
-					os_printf("data self channel: %d \r\n",wifi_get_channel());
-					os_printf("data type or channel error\r\n");
+					ACT_PRINT(" data type %d \r\n",light_cmd.type);
+					ACT_PRINT("data channel :%d \r\n",light_cmd.wifiChannel);
+					ACT_PRINT("data self channel: %d \r\n",wifi_get_channel());
+					ACT_PRINT("data type or channel error\r\n");
 					return;
 				}
-		     	light_action_set_csum(&light_cmd);
+
+		     	light_EspnowSetCsum(&light_cmd);
 				   #if ACT_DEBUG
-					  int j;
-				   for(j=0;j<sizeof(LightActionCmd);j++) ACT_PRINT("%02x ",*((uint8*)(&light_cmd)+j));
-				   ACT_PRINT("\r\n");
+                    int j;
+                    for(j=0;j<sizeof(LightActionCmd);j++) ACT_PRINT("%02x ",*((uint8*)(&light_cmd)+j));
+                    ACT_PRINT("\r\n");
 				   #endif
 				   #if (LIGHT_DEBUG==0)
-				   
-                       ACT_PRINT("send to mac: %02x %02x %02x %02x %02x %02x\r\n",
-    				   	SWITCH_MAC[0],SWITCH_MAC[1],SWITCH_MAC[2],SWITCH_MAC[3],SWITCH_MAC[4],SWITCH_MAC[5]);
-                       esp_now_send(SWITCH_MAC, (uint8*)(&light_cmd), sizeof(LightActionCmd)); //send ack
-
+                    ACT_PRINT("send to mac: %02x %02x %02x %02x %02x %02x\r\n",
+                    SWITCH_MAC[0],SWITCH_MAC[1],SWITCH_MAC[2],SWITCH_MAC[3],SWITCH_MAC[4],SWITCH_MAC[5]);
+                    esp_now_send(SWITCH_MAC, (uint8*)(&light_cmd), sizeof(LightActionCmd)); //send ack
 				   #else
-				   
-                       ACT_PRINT("light debug: send to mac: %02x %02x %02x %02x %02x %02x\r\n",
-    				   	mac_bkp[0],mac_bkp[1],mac_bkp[2],mac_bkp[3],mac_bkp[4],mac_bkp[5]);
-                       esp_now_send(mac_bkp, (uint8*)(&light_cmd), sizeof(LightActionCmd)); //send ack
+                    ACT_PRINT("light debug: send to mac: %02x %02x %02x %02x %02x %02x\r\n",
+                    mac_bkp[0],mac_bkp[1],mac_bkp[2],mac_bkp[3],mac_bkp[4],mac_bkp[5]);
+                    esp_now_send(mac_bkp, (uint8*)(&light_cmd), sizeof(LightActionCmd)); //send ack
 				   #endif
-		}else{
+		    	//}
+		    }else{
 			ACT_PRINT("SOURCE MAC CHEK FAIL \r\n");
    		}
 	}else{
 		ACT_PRINT("cmd check sum error\r\n");
 	}
-
 }
 
-void ICACHE_FLASH_ATTR light_action_init()
+void ICACHE_FLASH_ATTR light_EspnowInit()
 {
-	ACT_PRINT("===============\r\n");
+	_LINE_DESP();
     ACT_PRINT("CHANNEL : %d \r\n",wifi_get_channel());
-	ACT_PRINT("===============\r\n");
-	
-	if (esp_now_init()==0) {
-		os_printf("direct link  init ok\n");
-		esp_now_register_recv_cb(light_action_rcv_cb);
-	} else {
-		os_printf("dl init failed\n");
-	}
+	_LINE_DESP();
+    
+    if (esp_now_init()==0) {
+        ACT_PRINT("direct link  init ok\n");
+        esp_now_register_recv_cb(light_EspnowRcvCb);
+    } else {
+        ACT_PRINT("esp-now already init\n");
+    }
+    //send data from station interface of switch to softap interface of light
+    esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);  //role 1: switch   ;  role 2 : light;
+    esp_now_set_kok(esp_now_key, ESPNOW_KEY_LEN);
 
-	    esp_now_set_self_role(2);  //role 1: switch   ;  role 2 : light;
+	    int j;
+	    for(j=0;j<SWITCH_DEV_NUM;j++){
+			
+#if ESPNOW_ENCRYPT
+			esp_now_add_peer((uint8*)SWITCH_MAC[j], (uint8)ESP_NOW_ROLE_CONTROLLER,(uint8)WIFI_DEFAULT_CHANNEL, esp_now_key, (uint8)ESPNOW_KEY_LEN);
+#else
+    	    esp_now_add_peer((uint8*)SWITCH_MAC[j], (uint8)ESP_NOW_ROLE_CONTROLLER,(uint8)WIFI_DEFAULT_CHANNEL, NULL, (uint8)ESPNOW_KEY_LEN);
+#endif
+		}
+
 }
 
-void ICACHE_FLASH_ATTR light_action_deinit()
+void ICACHE_FLASH_ATTR light_EspnowDeinit()
 {
-
     esp_now_unregister_recv_cb(); 
     esp_now_deinit();
 }
@@ -188,7 +212,7 @@ void ICACHE_FLASH_ATTR light_action_deinit()
 #elif LIGHT_SWITCH
 
 #define ACTION_RETRY_NUM  3
-#define ACTION_RETRY_TIMER_MS  200
+#define ACTION_RETRY_TIMER_MS  50
 typedef void (*ActionToutCallback)(uint32* act_idx);
 
 
@@ -224,7 +248,7 @@ LOCAL uint32 pwm_duty[8];
 LOCAL uint32 pwm_period;
 
 bool ICACHE_FLASH_ATTR
-	check_light_cmd_result()
+	switch_CheckCmdResult()
 {
     int i;
 	for(i=0;i<channel_num;i++){
@@ -235,15 +259,15 @@ bool ICACHE_FLASH_ATTR
 
 
 void ICACHE_FLASH_ATTR
-	action_ack_callback()
+	switch_EspnowAckCb()
 {
-	if( check_light_cmd_result() ){
+	if( switch_CheckCmdResult() ){
 		if(channel_cur == 14){
 		    ACT_PRINT("release power\r\n");
 		    _SWITCH_GPIO_RELEASE();
 		}else{
 			ACT_PRINT("SEND NEXT CHANNEL: %d \r\n",++channel_cur);
-			switch_send_channel_cmd(channel_cur,pwm_chn_num, pwm_duty, pwm_period);
+			switch_EspnowSendCmdByChnl(channel_cur,pwm_chn_num, pwm_duty, pwm_period);
 		}
 
 	}
@@ -251,7 +275,7 @@ void ICACHE_FLASH_ATTR
 }
 
 bool ICACHE_FLASH_ATTR
-	check_light_sync_result()
+	switch_CheckSyncResult()
 {
     int i;
 	for(i=0;i<CMD_NUM;i++){ //CMD NUM QUEALS PRACTICAL LIGHT NUMBER
@@ -262,9 +286,9 @@ bool ICACHE_FLASH_ATTR
 
 
 void ICACHE_FLASH_ATTR
-	action_sync_callback()
+	switch_EspnowSyncCb()
 {
-	if( check_light_sync_result() ){
+	if( switch_CheckSyncResult() ){
 		os_printf("SYNC FINISHED ...\r\n");
 		#if 0
 		UART_WaitTxFifoEmpty(0,100000);
@@ -284,8 +308,8 @@ void ICACHE_FLASH_ATTR
 		    _SWITCH_GPIO_RELEASE();
 		}else{
 			ACT_PRINT("SYNC NEXT CHANNEL: %d \r\n",++channel_cur);
-			//switch_send_channel_cmd(channel_cur,pwm_chn_num, pwm_duty, pwm_period);
-			switch_set_sync_param(channel_cur);
+			//switch_EspnowSendCmdByChnl(channel_cur,pwm_chn_num, pwm_duty, pwm_period);
+			switch_EspnowSendChnSync(channel_cur);
 		}
 		#endif
 
@@ -297,7 +321,7 @@ void ICACHE_FLASH_ATTR
 
 
  void ICACHE_FLASH_ATTR
- 	switch_set_light_retry(void* arg)
+ 	switch_EspnowSendRetry(void* arg)
 {
     uint32 _idx = *((uint32*)arg);
     LightActionCmd* action_retry_cmd = &(actionReqStatus[_idx].lightActionCmd);
@@ -314,9 +338,9 @@ void ICACHE_FLASH_ATTR
 				action_status->status = ACT_TIME_OUT;
 				
 				if(action_retry_cmd->type==ACT_TYPE_SYNC){
-					action_sync_callback();
+					switch_EspnowSyncCb();
 				}else if(action_retry_cmd->type==ACT_DATA){
-				    action_ack_callback();
+				    switch_EspnowAckCb();
 				}
 			}
     	}else{
@@ -330,7 +354,7 @@ void ICACHE_FLASH_ATTR
 
 }
 
-void ICACHE_FLASH_ATTR switch_send_channel_cmd(uint8 chn,uint32 channelNum, uint32* duty, uint32 period)
+void ICACHE_FLASH_ATTR switch_EspnowSendCmdByChnl(uint8 chn,uint32 channelNum, uint32* duty, uint32 period)
 {
 	int i = 0;
 	os_memset(channel_group, 0 ,sizeof(channel_group));
@@ -355,18 +379,18 @@ void ICACHE_FLASH_ATTR switch_send_channel_cmd(uint8 chn,uint32 channelNum, uint
 		ACT_PRINT("WIFI GET CHANNEL : %d \r\n",wifi_get_channel());
 
 		for(i=0;i<channel_num;i++){
-			switch_set_light_param(channel_group[i], channelNum, duty, period);
+			switch_EspnowSendLightCmd(channel_group[i], channelNum, duty, period);
 			
 		}
 	}else{
-		action_ack_callback();//next channel;
+		switch_EspnowAckCb();//next channel;
     }
 }
 
 
-extern uint32 user_get_battery_voltage_mv();
+extern uint32 user_GetBatteryVoltageMv();
 
-void ICACHE_FLASH_ATTR switch_set_light_param(uint8 idx, uint32 channelNum, uint32* duty, uint32 period)
+void ICACHE_FLASH_ATTR switch_EspnowSendLightCmd(uint8 idx, uint32 channelNum, uint32* duty, uint32 period)
 {
     os_timer_disarm(&actionReqStatus[idx].req_timer); //disarm retry timer;
     actionReqStatus[idx].sequence+=1 ;//send another seq of cmd
@@ -380,7 +404,7 @@ void ICACHE_FLASH_ATTR switch_set_light_param(uint8 idx, uint32 channelNum, uint
     light_cmd.type = ACT_DATA;
     light_cmd.pwm_num = channelNum;
 	light_cmd.wifiChannel = wifi_get_channel();
-	light_cmd.battery_voltage_mv=user_get_battery_voltage_mv();
+	light_cmd.battery_voltage_mv=user_GetBatteryVoltageMv();
 	if (light_cmd.battery_voltage_mv==0) {
 		light_cmd.battery_status=ACT_BAT_NA;
 	} else if (light_cmd.battery_voltage_mv<BAT_EMPTY_MV) {
@@ -395,7 +419,7 @@ void ICACHE_FLASH_ATTR switch_set_light_param(uint8 idx, uint32 channelNum, uint
     os_memcpy(light_cmd.source_mac,mac_buf,sizeof(mac_buf));
 
     light_cmd.period = period;
-    light_action_set_csum(&light_cmd);
+    light_EspnowSetCsum(&light_cmd);
 
     #if ACT_DEBUG
 	ACT_PRINT("send to :\r\n");
@@ -413,7 +437,7 @@ void ICACHE_FLASH_ATTR switch_set_light_param(uint8 idx, uint32 channelNum, uint
 }
 
 void ICACHE_FLASH_ATTR 
-	switch_set_sync_param(uint8 channel)
+	switch_EspnowSendChnSync(uint8 channel)
 {
 	ACT_PRINT("SYNC AT CHANNEL %d \r\n",channel);
 	wifi_set_channel(channel);
@@ -440,7 +464,7 @@ void ICACHE_FLASH_ATTR
         	wifi_get_macaddr(STATION_IF,mac_buf);
         	os_printf("source mac: %02x %02x %02x %02x %02x %02x\r\n",mac_buf[0],mac_buf[1],mac_buf[2],mac_buf[3],mac_buf[4],mac_buf[5]);
             os_memcpy(light_cmd.source_mac,mac_buf,sizeof(mac_buf));
-            light_action_set_csum(&light_cmd);
+            light_EspnowSetCsum(&light_cmd);
         
             #if ACT_DEBUG
         	ACT_PRINT("send to :\r\n");
@@ -456,7 +480,7 @@ void ICACHE_FLASH_ATTR
     	}
 	}
 	if(skip_flg){
-		action_sync_callback();
+		switch_EspnowSyncCb();
 	}
 }
 
@@ -464,17 +488,17 @@ void ICACHE_FLASH_ATTR
 
 
 void ICACHE_FLASH_ATTR
-	switch_channel_sync_start()
+	switch_EspnowChnSyncStart()
 {
 	int i;
 	for(i=0;i<LIGHT_DEV_NUM;i++){
 		actionReqStatus[i].wifichannel = 0;
 	}
 	channel_cur = 1;
-	switch_set_sync_param(channel_cur);
+	switch_EspnowSendChnSync(channel_cur);
 }
 
-void ICACHE_FLASH_ATTR switch_action_rcv_cb(u8 *macaddr, u8 *data, u8 len)
+void ICACHE_FLASH_ATTR switch_EspnowRcvCb(u8 *macaddr, u8 *data, u8 len)
 {
 	int i;
 	#if ACT_DEBUG
@@ -497,7 +521,7 @@ void ICACHE_FLASH_ATTR switch_action_rcv_cb(u8 *macaddr, u8 *data, u8 len)
     uint32 light_index=light_data.cmd_index;
 
 
-	if(light_action_cmd_validate(&light_data) ){
+	if(light_EspnowCmdValidate(&light_data) ){
 		ACT_PRINT("cmd check sum OK\r\n");
 
        if(0 == os_memcmp(light_data.source_mac+1, LIGHT_MAC[light_index]+1,sizeof(SWITCH_MAC)-1)){
@@ -508,13 +532,13 @@ void ICACHE_FLASH_ATTR switch_action_rcv_cb(u8 *macaddr, u8 *data, u8 len)
        		ACT_PRINT("cmd %d ack \r\n",_idx);
 			ACT_PRINT("cmd channel : %d \r\n",light_data.wifiChannel);
 			ACT_PRINT("SELF CHANNEL: %d \r\n",wifi_get_channel());
-			action_ack_callback();
+			switch_EspnowAckCb();
        	}else if(light_data.sequence == actionReqStatus[_idx].sequence && light_data.type == ACT_TYPE_SYNC){
 			actionReqStatus[_idx].status = ACT_ACK;
 			if(wifi_get_channel()==light_data.wifiChannel){
 			    actionReqStatus[_idx].wifichannel = light_data.wifiChannel;
        		    ACT_PRINT("cmd %d sync,@ CHANNEL %d \r\n",_idx,actionReqStatus[_idx].wifichannel);
-			    action_sync_callback();
+			    switch_EspnowSyncCb();
 			}else{
 				ACT_PRINT("MESH SYNC CHANNEL ERROR, get channel : %d , data_channel : %d\r\n",wifi_get_channel,light_data.wifiChannel);
 			}
@@ -535,15 +559,13 @@ void ICACHE_FLASH_ATTR switch_action_rcv_cb(u8 *macaddr, u8 *data, u8 len)
 
 }
 
-void ICACHE_FLASH_ATTR switch_ActionInit()
+void ICACHE_FLASH_ATTR switch_EspnowInit()
 {
     uint8 i;
 	int e_res;
-
-	
 	if (esp_now_init()==0) {
 		os_printf("direct link  init ok\n");
-		esp_now_register_recv_cb(switch_action_rcv_cb);
+		esp_now_register_recv_cb(switch_EspnowRcvCb);
 	} else {
 		os_printf("dl init failed\n");
 	}
@@ -565,7 +587,7 @@ void ICACHE_FLASH_ATTR switch_ActionInit()
 		#else
     		esp_now_add_peer((uint8*)LIGHT_MAC[i], (uint8)ESP_NOW_ROLE_SLAVE,(uint8)WIFI_DEFAULT_CHANNEL, NULL, (uint8)ESPNOW_KEY_LEN);//wjl
 		#endif
-        actionReqStatus[i].actionToutCb = (ActionToutCallback)switch_set_light_retry;
+        actionReqStatus[i].actionToutCb = (ActionToutCallback)switch_EspnowSendRetry;
         
         os_memset(&(actionReqStatus[i].lightActionCmd),0,sizeof(LightActionCmd));
         os_timer_disarm(&actionReqStatus[i].req_timer);
@@ -582,7 +604,7 @@ void ICACHE_FLASH_ATTR switch_ActionInit()
 
 }
 
-void ICACHE_FLASH_ATTR switch_ActionDeinit()
+void ICACHE_FLASH_ATTR switch_EspnowDeinit()
 {
     esp_now_unregister_recv_cb(); 
     esp_now_deinit();

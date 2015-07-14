@@ -19,6 +19,7 @@
 #include "user_esp_platform.h"
 #include "user_iot_version.h"
 #include "upgrade.h"
+#include "esp_send.h"
 #if ESP_MESH_SUPPORT
 	#include "mesh.h"
 #endif
@@ -110,6 +111,7 @@ LOCAL void user_esp_platform_sent_beacon(struct espconn *pespconn);
 
 void ICACHE_FLASH_ATTR espconn_esp_sent(struct espconn *pconn, uint8_t *buf, uint16_t len)
 {
+#if 0
 #ifdef CLIENT_SSL_ENABLE
     espconn_secure_sent(pconn, buf, len);
 #else
@@ -118,6 +120,21 @@ void ICACHE_FLASH_ATTR espconn_esp_sent(struct espconn *pconn, uint8_t *buf, uin
     os_timer_disarm(&beacon_timer);
     os_timer_setfn(&beacon_timer, (os_timer_func_t *)user_esp_platform_sent_beacon, &user_conn);
     os_timer_arm(&beacon_timer, BEACON_TIME, 0);
+#else
+	sint8 res;
+	bool queue_empty = espSendQueueIsEmpty(espSendGetRingbuf());
+	
+    res = espSendEnq(buf, len, pconn, ESP_DATA,TO_SERVER,espSendGetRingbuf());
+	if(res==-1){
+		os_printf("espconn send error , no buf in app...\r\n");
+	}
+
+	/*send the packet if platform sending queue is empty*/
+	/*if not, espconn sendcallback would post another sending event*/
+	if(queue_empty){
+		system_os_post(ESP_SEND_TASK_PRIO, 0, (os_param_t)espSendGetRingbuf());
+	}
+#endif
 }
 /******************************************************************************
  * FunctionName : user_esp_platform_load_param
@@ -483,8 +500,19 @@ user_esp_platform_sent_cb(void *arg)
     struct espconn *pespconn = arg;
 
     ESP_DBG("user_esp_platform_sent_cb\n");
-	os_timer_disarm(&beacon_timer);
+    os_timer_disarm(&beacon_timer);
+    os_timer_setfn(&beacon_timer, (os_timer_func_t *)user_esp_platform_sent_beacon, &user_conn);
     os_timer_arm(&beacon_timer, BEACON_TIME, 0);
+
+	espSendAck(espSendGetRingbuf());
+#if 0  //
+	//espSendQueueUpdate(espSendGetRingbuf());//update once send res == 0
+	if(espSendQueueIsEmpty(espSendGetRingbuf())) 
+		return;
+	else 
+		system_os_post(ESP_SEND_TASK_PRIO, 0, (os_param_t)espSendGetRingbuf());
+#endif
+		
 }
 
 /******************************************************************************
@@ -1021,7 +1049,7 @@ LOCAL void ICACHE_FLASH_ATTR
 user_esp_platform_recv_cb(void *arg, char *pusrdata, unsigned short length)
 {
 #if ESP_MESH_SUPPORT
-	mesh_reconn_stop();
+	mesh_StopReconnCheck();
 #endif
     char *pstr = NULL;
 	#if ESP_MESH_SUPPORT
@@ -1398,7 +1426,7 @@ user_esp_platform_dns_found(const char *name, ip_addr_t *ipaddr, void *arg)
         os_timer_disarm(&client_timer);
 
 		#if ESP_MESH_SUPPORT
-		    user_mesh_start(MESH_ONLINE);
+		    mesh_StartReconnCheck(MESH_ONLINE);
 		#endif
 		
 		#if 0 //ESP_MESH_SUPPORT
@@ -1408,8 +1436,8 @@ user_esp_platform_dns_found(const char *name, ip_addr_t *ipaddr, void *arg)
 				ESP_DBG("--------------\r\n");
 				ESP_DBG("TRY TO ENABLE MESH ONLINE MODE\r\n");
 				ESP_DBG("--------------\r\n");
-		        //user_mesh_init();//reset to online mode
-		        user_mesh_start(MESH_ONLINE);
+		        //user_MeshInit();//reset to online mode
+		        mesh_StartReconnCheck(MESH_ONLINE);
 		        return;
 			}
 		#endif
@@ -1503,8 +1531,7 @@ void ICACHE_FLASH_ATTR
     user_mdns_conf()
 {
     os_printf("%s\r\n",__func__);
-	//wifi_set_broadcast_if(STATION_MODE);
-	
+	wifi_set_broadcast_if(STATIONAP_MODE);
 	espconn_mdns_close();
     struct ip_info ipconfig;
     wifi_get_ip_info(STATION_IF, &ipconfig);
@@ -1747,6 +1774,7 @@ user_esp_platform_init(void)
 void ICACHE_FLASH_ATTR
 user_esp_platform_init_peripheral(void)
 {
+	espSendQueueInit();
     os_memset(iot_version, 0, sizeof(iot_version));
 	os_sprintf(iot_version,"%s%d.%d.%dt%d(%s)",VERSION_TYPE,IOT_VERSION_MAJOR,\
 	IOT_VERSION_MINOR,IOT_VERSION_REVISION,device_type,UPGRADE_FALG);
@@ -1921,73 +1949,5 @@ void ICACHE_FLASH_ATTR _LINE_DESP()
 {
 	 ets_printf("%s",_line_sep);
 }
-
-
-
-#if 0
-void ICACHE_FLASH_ATTR
-	user_platform_flow_init()
-{
-#if 1
-
-
-#if ESP_PLATFORM
-    /*Initialization of the peripheral drivers*/
-    /*For light demo , it is user_light_init();*/
-    /* Also check whether assigned ip addr by the router.If so, connect to ESP-server  */
-    ////user_esp_platform_init();//replaced
-    user_esp_platform_init_peripheral();
-
-#endif
-    /*Establish a udp socket to receive local device detect info.*/
-    /*Listen to the port 1025, as well as udp broadcast.
-    /*If receive a string of device_find_request, it reply its IP address and MAC.*/
-    user_devicefind_init();
-
-    /*Establish a TCP server for http(with JSON) POST or GET command to communicate with the device.*/
-    /*You can find the command in "2B-SDK-Espressif IoT Demo.pdf" to see the details.*/
-    /*the JSON command for curl is like:*/
-    /*3 Channel mode: curl -X POST -H "Content-Type:application/json" -d "{\"period\":1000,\"rgb\":{\"red\":16000,\"green\":16000,\"blue\":16000}}" http://192.168.4.1/config?command=light      */
-    /*5 Channel mode: curl -X POST -H "Content-Type:application/json" -d "{\"period\":1000,\"rgb\":{\"red\":16000,\"green\":16000,\"blue\":16000,\"cwhite\":3000,\"wwhite\",3000}}" http://192.168.4.1/config?command=light      */
-#ifdef SERVER_SSL_ENABLE
-    user_webserver_init(SERVER_SSL_PORT);
-#else
-    user_webserver_init(SERVER_PORT);
-#endif
-
-os_printf("test heap : %d \r\n",system_get_free_heap_size());
-
-//=========================
-#if 0
-
-//action init
-//wifi_set_channel(1);
-//light_action_init();
-
-//==============
-#else
-/*
-extern struct esp_platform_saved_param esp_param;
-os_printf("DEBUG: esp_param.activeflag:%d \r\n",esp_param.activeflag);
-if(esp_param.activeflag!=1){
-	esptouch_flow_init();
-}else{
-	
-	//light_action_init();
-
-    os_printf("Device already registered\r\n");
-	user_esp_platform_check_connect();
-}
-*/
-#endif
-//==============
-
-
-#endif
-
-}
-#endif
-
-
 
 #endif

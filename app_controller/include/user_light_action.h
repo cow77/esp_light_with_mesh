@@ -8,7 +8,7 @@
 
 
 
-#define CMD_NUM 8
+#define CMD_NUM 10
 #define LIGHT_DEV_NUM  10
 
 
@@ -32,8 +32,8 @@ const uint8 LIGHT_MAC[LIGHT_DEV_NUM][6] = {
 	                                                 {0x1a,0xfe,0x34, 0xa1,0x08,0x25},
 	                                                 {0x1a,0xfe,0x34, 0xa1,0x09,0x3a},
 	                                                 {0x1a,0xfe,0x34, 0xa1,0x06,0x66},												
-	                                                 {0x1a,0xfe,0x34, 0x00,0x00,0x00},
-	                                                 {0x1a,0xfe,0x34, 0x00,0x00,0x00}
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x07,0x47},
+	                                                 {0x1a,0xfe,0x34, 0xa1,0x08,0x1a}
                                             };
 
 
@@ -41,17 +41,17 @@ const uint8 LIGHT_MAC[LIGHT_DEV_NUM][6] = {
 
 
 #if LIGHT_DEVICE
-void light_action_init();
-void light_action_deinit();
+void light_EspnowInit();
+void light_EspnowDeinit();
 
 
 
 #elif LIGHT_SWITCH
-void  switch_ActionInit();
-void  switch_set_light_param(uint8 idx, uint32 channelNum, uint32* duty, uint32 period);
-void switch_send_channel_cmd(uint8 chn,uint32 channelNum, uint32* duty, uint32 period);
-void switch_set_sync_param(uint8 channel);
-void  switch_ActionDeinit();
+void  switch_EspnowInit();
+void  switch_EspnowSendLightCmd(uint8 idx, uint32 channelNum, uint32* duty, uint32 period);
+void switch_EspnowSendCmdByChnl(uint8 chn,uint32 channelNum, uint32* duty, uint32 period);
+void switch_EspnowSendChnSync(uint8 channel);
+void  switch_EspnowDeinit();
 #endif
 
 
