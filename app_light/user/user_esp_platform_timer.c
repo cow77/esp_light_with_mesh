@@ -20,7 +20,7 @@
 #define ESP_DEBUG
 
 #ifdef ESP_DEBUG
-#define ESP_DBG //os_printf
+#define ESP_DBG os_printf
 #else
 #define ESP_DBG
 #endif

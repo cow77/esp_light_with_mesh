@@ -17,7 +17,8 @@ struct esp_platform_saved_param {
     uint8 devkey[40];
     uint8 token[40];
     uint8 activeflag;
-    uint8 pad[3];
+	uint8 reset_flg;
+    uint8 pad[2];
 };
 
 struct esp_platform_sec_flag_param {

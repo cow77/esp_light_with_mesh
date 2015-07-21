@@ -1,5 +1,5 @@
 #!/bin/bash
-export SDK_BASE=/home/esp8266/Share/git_folder/test_git/merge_150704/LIGHT_PWM_PROJECT
+export SDK_BASE=/home/esp8266/Share/LIGHT_PWM_PROJECT
 
 echo "gen_misc.sh version 20150511"
 echo ""

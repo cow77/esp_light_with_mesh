@@ -23,6 +23,8 @@
 #define MESH_TIME_OUT_MS   30000
 //time expire to check mesh init status
 #define MESH_STATUS_CHECK_MS  1000
+//length of binary upgrade stream in a single packet
+#define MESH_UPGRADE_SEC_SIZE 640
 
 typedef void (*mesh_FailCallback)(void *para);
 typedef void (*mesh_SuccessCallback)(void *para);
@@ -47,6 +49,8 @@ typedef struct  {
 void user_MeshInit();
 void user_MeshSetInfo();
 void mesh_StopReconnCheck();
+char* mesh_GetMdevMac();
+
 
 #endif
 #endif

@@ -49,7 +49,7 @@ LOCAL os_timer_t upgrade_check_timer;
 
 #if ESP_MESH_SUPPORT 
 #include "mesh.h"
-char *sip = NULL, *sport = NULL;
+char *sip = NULL, *sport = NULL, *smac = NULL;
 #endif
 
 /******************************************************************************
@@ -1401,7 +1401,8 @@ json_send(void *arg, ParmType ParmType)
     
     char pbuf[jsonSize];
     struct espconn *ptrespconn = arg;
-    char *router = ESP_MESH_ROUTER_STRING;
+    //char *router = ESP_MESH_ROUTER_STRING;
+    char* dev_mac = (char*)mesh_GetMdevMac();
     
     os_memset((void *)pbuf, 0, sizeof(pbuf));
     
@@ -1426,11 +1427,17 @@ json_send(void *arg, ParmType ParmType)
     if (!mesh_json_add_elem(pbuf, jsonSize, sport, ESP_MESH_JSON_PORT_ELEM_LEN)) {
     	return;
     }
-    
-    if (!mesh_json_add_elem(pbuf, jsonSize, router, ESP_MESH_JSON_ROUTER_ELEM_LEN)) {
+	
+    if (!mesh_json_add_elem(pbuf, jsonSize, dev_mac, ESP_MESH_JSON_DEV_MAC_ELEM_LEN)) {
     	return;
     }
-
+    //if (!mesh_json_add_elem(pbuf, jsonSize, router, ESP_MESH_JSON_ROUTER_ELEM_LEN)) {
+    //	return;
+    //}
+	WEB_INFO("SIP: %s\r\n",sip);
+	WEB_INFO("SPORT: %s\r\n",sport);
+	WEB_INFO("dev_mac: %s\r\n",dev_mac);
+	
 	WEB_INFO("FIND SIP ,SPORT ... \r\n");
 	WEB_INFO("DATA: \r\n%s \r\n",pbuf);
 	int size_tmp = os_strlen(pbuf);
@@ -1471,7 +1478,9 @@ response_send(void *arg, bool responseOK)
 	#if ESP_MESH_SUPPORT
     	
         struct espconn *ptrespconn = arg;
-        char *router = ESP_MESH_ROUTER_STRING;
+        //char *router = ESP_MESH_ROUTER_STRING;
+		char* dev_mac = (char*)mesh_GetMdevMac();
+		
         const size_t len = ESP_MESH_JSON_IP_ELEM_LEN + ESP_MESH_JSON_PORT_ELEM_LEN + ESP_MESH_JSON_ROUTER_ELEM_LEN + 5;
         char pbuf[ESP_MESH_JSON_IP_ELEM_LEN + ESP_MESH_JSON_PORT_ELEM_LEN + ESP_MESH_JSON_ROUTER_ELEM_LEN + 5];
         if (!sip || !sport) {
@@ -1489,9 +1498,12 @@ response_send(void *arg, bool responseOK)
         if (!mesh_json_add_elem(pbuf, len, sport, ESP_MESH_JSON_PORT_ELEM_LEN)) {
             return;
         }
-        if (!mesh_json_add_elem(pbuf, len, router, ESP_MESH_JSON_ROUTER_ELEM_LEN)) {
-            return;
+	    if (!mesh_json_add_elem(pbuf, jsonSize, dev_mac, ESP_MESH_JSON_DEV_MAC_ELEM_LEN)) {
+    	    return;
         }
+        //if (!mesh_json_add_elem(pbuf, len, router, ESP_MESH_JSON_ROUTER_ELEM_LEN)) {
+        //    return;
+        //}
 		uint32 dlen = os_strlen(pbuf);
 		//pbuf[dlen] = '\r';
 		//pbuf[dlen+1] = '\n';

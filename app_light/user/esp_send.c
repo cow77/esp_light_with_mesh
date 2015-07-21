@@ -4,7 +4,7 @@
 #include "ringbuf.h"
 #include "osapi.h"
 #include "mem.h"
-
+#include "user_interface.h"
 
 #define SEND_DBG  os_printf
 
@@ -12,6 +12,8 @@ RINGBUF ringBuf;
 #define ESP_SEND_QUEUE_LEN (1024*2)
 #define ESP_SEND_BUF_LEN (1460)
 uint8 espSendBuf[ESP_SEND_QUEUE_LEN];
+#define SEND_RETRY_NUM 50
+uint16 send_retry_cnt = 0;
 os_event_t esp_SendProcTaskQueue[ESP_SEND_TASK_QUEUE_SIZE];
 os_timer_t esp_send_t;
 
@@ -39,10 +41,10 @@ sint8 ICACHE_FLASH_ATTR
 		pdata = data;
 		RINGBUF_Push(r,pdata ,length);
 		
-		SEND_DBG("data enq: \r\n len: %d \r\n++++++++++++++++\r\n",length);
-		SEND_DBG("pconn ori: 0x%08x\r\n",pconn);
-		SEND_DBG("%s \r\n",data);
-		SEND_DBG("+++++++++++++++++++\r\n");
+		//SEND_DBG("data enq: \r\n len: %d \r\n++++++++++++++++\r\n",length);
+		//SEND_DBG("pconn ori: 0x%08x\r\n",pconn);
+		//SEND_DBG("%s \r\n",data);
+		//SEND_DBG("+++++++++++++++++++\r\n");
 		return 0;
 	}else{
 		return -1;
@@ -70,7 +72,7 @@ void ICACHE_FLASH_ATTR
  * FunctionName : espSendTask
  * Description  : handler for platform data send
 *******************************************************************************/
-sint8 ICACHE_FLASH_ATTR
+void ICACHE_FLASH_ATTR
 	espSendTask(os_event_t *e)
 {
 	SEND_DBG("************\r\n%s\r\n*************\r\n",__func__);
@@ -93,36 +95,59 @@ sint8 ICACHE_FLASH_ATTR
 
 	if(sf.dataLen>ESP_SEND_BUF_LEN){
 		SEND_DBG("WARNING: DATA TOO LONG ,DROP(<=%d)...\r\n",ESP_SEND_BUF_LEN);
-		return -1;
+		return;
 	}
 
-	if(sf.pConn==NULL){
-		return -1;
+	if(sf.pConn==NULL|| sf.pConn->proto.tcp == NULL){
+		
+		espSendQueueUpdate(espSendGetRingbuf());//	
+		espSendAck(espSendGetRingbuf());
+		SEND_DBG("send espconn NULL \r\n");
+		return;
 	}else{
 		
 		RINGBUF_PullRaw(r,dataSend,sf.dataLen,sizeof(EspSendFrame));
 
     	sint8 res;
+
+		
 #ifdef CLIENT_SSL_ENABLE
 		res = espconn_secure_sent(sf.pConn, dataSend, sf.dataLen);
 #else
 		res = espconn_sent(sf.pConn, dataSend, sf.dataLen);
 #endif
     	SEND_DBG("pconn: 0x%08x \r\n",sf.pConn);
+		SEND_DBG("pconn state: %d \r\n",sf.pConn->state);
+		SEND_DBG("pconn linkcnt: %d\r\n",sf.pConn->link_cnt);
     	SEND_DBG("datalen: %d \r\n******************\r\n",sf.dataLen);
     	SEND_DBG("%s \r\n",dataSend);
     	SEND_DBG("*******************\r\n");
 
     	if(res==0){
     		SEND_DBG("espconn send ok, wait for callback...\r\n");
-    		espSendQueueUpdate(espSendGetRingbuf());//		
-    		if(sf.dTgt == TO_LOCAL){
-    			espSendAck(espSendGetRingbuf());
-    		}
+			send_retry_cnt = 0;
+    		espSendQueueUpdate(espSendGetRingbuf());//	
+    		espSendAck(espSendGetRingbuf());
+    		//if(sf.dTgt == TO_LOCAL){
+    		//	espSendAck(espSendGetRingbuf());
+    		//}
     	}else{
-    		SEND_DBG("espconn send fail, send again...\r\n");
-    		os_timer_disarm(&esp_send_t);
-    		os_timer_arm(&esp_send_t,50,0);
+    		SEND_DBG("espconn send fail, send again...retry cnt: %d\r\n",send_retry_cnt);
+			SEND_DBG("espconn state: %d ; heap: %d ; ringbuf fill_cnt: %d\r\n",sf.pConn->state,system_get_free_heap_size(),espSendGetRingbuf()->fill_cnt);
+			if(send_retry_cnt>=SEND_RETRY_NUM || sf.pConn->state == ESPCONN_CLOSE || wifi_station_get_connect_status() != STATION_GOT_IP ){
+				send_retry_cnt = 0;
+				espSendQueueUpdate(espSendGetRingbuf());//	
+				espSendAck(espSendGetRingbuf());
+			}else{
+			    send_retry_cnt++;
+    		    os_timer_disarm(&esp_send_t);
+				if(send_retry_cnt>30){
+                    os_timer_arm(&esp_send_t,1000,0);
+				}else{
+    		        os_timer_arm(&esp_send_t,500,0);
+				}
+				
+			}
     	}
 	}
 	

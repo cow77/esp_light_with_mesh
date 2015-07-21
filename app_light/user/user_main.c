@@ -97,15 +97,6 @@ void ICACHE_FLASH_ATTR
     light_EspnowInit();
 #endif
 
-#if ESP_MESH_SUPPORT
-	/*initialize mesh network.
-	  1. search for existing mesh.
-      2. if failed , try connecting recorded router.
-	*/
-	user_MeshSetInfo();
-    user_MeshInit();
-#endif
-
 #if 1
 
 #if ESP_PLATFORM
@@ -148,6 +139,16 @@ httpdInit(builtInUrls, SERVER_PORT);
 
 #endif
 
+#if ESP_MESH_SUPPORT
+	/*initialize mesh network.
+	  1. search for existing mesh.
+      2. if failed , try connecting recorded router.
+	*/
+	user_MeshSetInfo();
+    user_MeshInit();
+#endif
+
+
 }
 
 /******************************************************************************
@@ -167,6 +168,7 @@ void user_init(void)
 	system_init_done_cb(light_main_flow);
 
 	
+    //light_EspnowInit();
 	//espSendQueueInit();
 
 }

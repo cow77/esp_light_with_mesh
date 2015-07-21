@@ -18,6 +18,7 @@
 #define ESP_TOUCH_SUPPORT  1
 #define ESP_NOW_SUPPORT 1
 #define ESP_WEB_SUPPORT 0
+#define ESP_MDNS_SUPPORT 1
 
 
 //#endif

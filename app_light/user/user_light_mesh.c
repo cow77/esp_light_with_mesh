@@ -8,6 +8,45 @@ os_timer_t mesh_check_t;
 os_timer_t mesh_tout_t;
 os_timer_t mesh_user_t;
 
+uint8 mesh_last_status=MESH_DISABLE;
+
+LOCAL char* mdev_mac = NULL;
+
+
+void ICACHE_FLASH_ATTR
+	mesh_MacIdInit()
+{
+	if(mdev_mac){
+		os_printf("Mesh mdev_mac: %s \r\n",mdev_mac);
+	}
+
+	mdev_mac = (char*)os_zalloc(ESP_MESH_JSON_DEV_MAC_ELEM_LEN+1);
+	
+	uint32 MAC_FLG = READ_PERI_REG(0x3ff00054);
+	MAC_FLG = ((MAC_FLG>>16)&0xff);
+	if(MAC_FLG == 0){
+		os_sprintf(mdev_mac,"\"mdev_mac\":\"18FE34%06X\"",system_get_chip_id());
+	}else if(MAC_FLG == 1){
+		os_sprintf(mdev_mac,"\"mdev_mac\":\"ACD074%06X\"",system_get_chip_id());
+	}else{
+		os_printf("dev mac error? 0x%02x\r\n",MAC_FLG);
+		return;
+	}
+	os_printf("Disp mdev_mac: %s\r\n",mdev_mac);
+
+}
+
+char* ICACHE_FLASH_ATTR
+	mesh_GetMdevMac()
+{
+	if(mdev_mac){
+	    return mdev_mac;
+	}else{
+		mesh_MacIdInit();
+		return mdev_mac;
+	}
+}
+
 /******************************************************************************
  * FunctionName : mesh_StopCheckTimer
  * Description  : Stop the mesh initialization status check
@@ -132,9 +171,19 @@ void ICACHE_FLASH_ATTR
 	MESH_INFO("CONNECTED, DO RUN ESP PLATFORM...\r\n");
 	MESH_INFO("mesh status: %d\r\n",espconn_mesh_get_status());
 	_LINE_DESP();
-	//init ESP-NOW ,so that light can be controlled by ESP-NOW SWITCHER.
+    struct ip_info sta_ip;
+    wifi_get_ip_info(STATION_IF,&sta_ip);
+	if( espconn_mesh_local_addr(&sta_ip.ip)){
+		MESH_INFO("THIS IS A MESH SUB NODE..\r\n");
+		uint32 mlevel = sta_ip.ip.addr&0xff;
+		light_ShowDevLevel(mlevel);
+	}else{
+		MESH_INFO("THIS IS A MESH ROOT..\r\n");
+	    light_ShowDevLevel(1);
+	}
 	
 #if ESP_NOW_SUPPORT
+	//init ESP-NOW ,so that light can be controlled by ESP-NOW SWITCHER.
 	light_EspnowInit();
 #endif
 	WIFI_StartCheckIp();
@@ -204,6 +253,11 @@ void ICACHE_FLASH_ATTR
 	MESH_INFO("mesh status: %d ; %d\r\n",mesh_status,system_get_free_heap_size());
 	MESH_INFO("--------------\r\n");
 	
+#if LIGHT_DEVICE
+	
+
+#endif
+
 	if(mesh_status == MESH_DISABLE){
 		MESH_INFO("MESH DISABLE , RUN FAIL CB ,retry:%d \r\n",LightMeshProc.init_retry);
 		if(LightMeshProc.init_retry<MESH_INIT_RETRY_LIMIT && (mesh_GetStartMs()<MESH_INIT_TIME_LIMIT)){
@@ -302,6 +356,7 @@ void ICACHE_FLASH_ATTR
 void ICACHE_FLASH_ATTR
 	user_MeshInit()
 {
+	mesh_MacIdInit();
 	LightMeshProc.mesh_suc_cb=mesh_SuccessCb;
 	LightMeshProc.mesh_fail_cb=mesh_FailCb;
 	LightMeshProc.mesh_init_tout_cb=mesh_TimeoutCb;

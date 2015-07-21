@@ -50,6 +50,8 @@ void user_rf_pre_init(void)
 void ICACHE_FLASH_ATTR
     light_switch_action()
 {
+	os_printf("ESPNOW ENABLE 6M TX RATE\r\n");
+	wifi_enable_6m_rate(true);
     user_SwitchReact();
 }
 
@@ -81,9 +83,9 @@ void user_init(void)
 {
 #if LIGHT_DEVICE
 #elif LIGHT_SWITCH
-    uart_div_modify(0, 80000000 / 115200);//SET BAUDRATE
+    uart_init(115200,115200);
     wifi_set_opmode(STATION_MODE);
-	//wifi_set_channel(1);
+	wifi_set_channel(1);
 
 	//Initialize DNS server for captive portal
 	//captdnsInit();

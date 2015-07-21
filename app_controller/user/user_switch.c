@@ -117,12 +117,34 @@ void ICACHE_FLASH_ATTR
 
 
 os_timer_t light_sync_t;
+uint32 pwm_duty_data[5];
+
+enum{
+COLOR_SET = 0,
+COLOR_CHG ,
+COLOR_TOGGLE,
+COLOR_LEVEL,
+LIGHT_RESET
+};
+
 
 void ICACHE_FLASH_ATTR
 	user_startChannelSync()
 {
 	_SWITCH_GPIO_HOLD();
-    switch_EspnowChnSyncStart();
+
+	if(switch_gpio_val == 0xd){
+    	os_printf("\r\n\n==========================\r\n");
+    	os_printf("SEND LIGHT RESET \r\n");
+    	os_printf("==========================\r\n\n\n");
+		uint32 code = LIGHT_RESET;
+		switch_EspnowSendCmdByChnl(1, 5, pwm_duty_data, 1000,code);
+	}else{
+    	os_printf("\r\n\n==========================\r\n");
+    	os_printf("SEND LIGHT SYNC \r\n");
+    	os_printf("==========================\r\n\n\n");
+        switch_EspnowChnSyncStart();
+	}
 
 }
 
@@ -140,18 +162,21 @@ void ICACHE_FLASH_ATTR
     switch_EspnowInit();
     os_printf("test action init ,CHANNEL %d \r\n",wifi_get_channel());
 	uint32 r=0,g=0,b=0,cw=0,ww=0;
-    uint32 pwm_duty_data[5];
+	uint8 code=COLOR_SET;
 	switch(switch_gpio_val){
-    case 0x0e:
+    case 0x0e: // change color
 		r=22222;
+		code = COLOR_CHG;
 		break;
 	case 0x07:
+		code = COLOR_TOGGLE;
 		g=22222;
 		break;
 	case 0x0d:
-		b=22222;
+		b=0;
 		break;
 	case 0x0b:
+		code = COLOR_LEVEL;
 		cw=22222;
 		ww=22222;
 		break;
@@ -169,7 +194,11 @@ void ICACHE_FLASH_ATTR
 	pwm_duty_data[4]=ww;
 
 	int i;
-	switch_EspnowSendCmdByChnl(1, 5, pwm_duty_data, 1000);
+	os_printf("\r\n\n==========================\r\n");
+	os_printf("SEND LIGHT CMD by channel \r\n");
+	os_printf("==========================\r\n\n\n");
+	os_printf("cmd code: %d \r\n",code);
+	switch_EspnowSendCmdByChnl(1, 5, pwm_duty_data, 1000,code);
 
 
 	//if there is a long press, run channel synchronization.
